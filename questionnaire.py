@@ -1,15 +1,16 @@
-
 from typing import Optional
 from state_store import StateStore
 
 STEPS = [
-    {"key": "name", "q": "¡Hola! Soy el asistente. ¿Cómo te llamas?"},
-    {"key": "need", "q": "¿En qué puedo ayudarte? (breve)"},
-    {"key": "phone", "q": "¿Me compartes tu teléfono de contacto?"},
+    {"key": "name", "q": "¡Hola! Soy el asistente virtual de atención. ¿Podrías decirme tu nombre?"},
+    {"key": "need", "q": "¿Podrías indicarme brevemente en qué necesitas ayuda hoy?"},
+    {"key": "phone", "q": "¿Me compartes tu número de teléfono para que un asesor te contacte?"},
 ]
 
-FINAL_MSG = ("Gracias, registré tus datos. Un asesor te contactará. "
-             "Escribe 'FIN' para terminar o continúa con tu consulta.")
+FINAL_MSG = (
+    "Gracias, registré tus datos. Un asesor de ICONSA te contactará pronto. "
+    "Puedes escribir 'FIN' para cerrar el registro o continuar con otra consulta."
+)
 
 class Questionnaire:
     def __init__(self, store: StateStore):
@@ -20,13 +21,13 @@ class Questionnaire:
             return None
         if message.upper() in {"CANCEL", "SALIR"}:
             self.store.clear_flow(user_id)
-            return "Cuestionario cancelado. ¿En qué más te apoyo?"
+            return "Cuestionario cancelado. ¿Hay algo más en lo que pueda asistirte?"
 
         state = self.store.get_flow(user_id) or {"step_idx": 0, "answers": {}}
         if state.get("completed"):
             if message.upper() == "FIN":
                 self.store.clear_flow(user_id)
-                return "Proceso finalizado. ¡Gracias!"
+                return "Proceso finalizado. ¡Gracias por contactarnos!"
             return None
 
         step_idx = state.get("step_idx", 0)
