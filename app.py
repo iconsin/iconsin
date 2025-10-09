@@ -1,5 +1,6 @@
 import os
 import json
+import random
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
@@ -27,12 +28,27 @@ DRIVE_FOLDERS = [
 # FUNCIONES AUXILIARES
 # ============================
 def search_all_folders(keywords):
+    """Busca documentos en todas las carpetas Drive configuradas"""
     results = []
     for fid in DRIVE_FOLDERS:
         if fid:
             results.extend(search_files(keywords, folder_id=fid, max_results=3))
     return results
 
+def random_fallback():
+    """Mensajes variados para cuando el bot no tiene información concreta"""
+    frases = [
+        "No tengo esa información en mis registros.",
+        "Lo siento, no encuentro nada relacionado con eso.",
+        "Esa respuesta no la tengo disponible por ahora.",
+        "No cuento con datos sobre ese tema.",
+        "No estoy seguro de eso, pero puedo intentar buscarlo."
+    ]
+    return random.choice(frases)
+
+# ============================
+# INSTANCIAS PRINCIPALES
+# ============================
 store = StateStore(os.getenv("DATABASE_URL", "sqlite:///data/bot.db"))
 wa = WhatsAppClient(
     access_token=os.getenv("WHATSAPP_ACCESS_TOKEN", ""),
@@ -45,7 +61,11 @@ qflow = Questionnaire(store=store)
 # ============================
 @app.route("/", methods=["GET"])
 def root():
-    return jsonify({"ok": True, "service": "WhatsApp Gemini+Drive Bot", "business": BUSINESS_NAME})
+    return jsonify({
+        "ok": True,
+        "service": "WhatsApp Gemini+Drive Bot",
+        "business": BUSINESS_NAME
+    })
 
 # ============================
 # WEBHOOK DE META
@@ -91,7 +111,6 @@ def process_incoming(message, envelope):
     if msg_type == "text":
         text_body = (message.get("text", {}) or {}).get("body", "").strip()
     elif msg_type == "interactive":
-        # Botones / Listas
         interactive = message.get("interactive", {})
         text_body = (
             (interactive.get("button_reply", {}) or {}).get("title")
@@ -103,9 +122,9 @@ def process_incoming(message, envelope):
 
     print(f"📝 Texto procesado: '{text_body}'")
 
-    # 1️⃣ ¿Está en el cuestionario?
+    # 1️⃣ Revisión en cuestionario (solo si aplica)
     reply = qflow.handle_message(user_id=from_wa, message=text_body)
-    if reply:
+    if reply and not reply.lower().startswith(("lo siento", "en qué puedo ayudarte", "hola")):
         wa.send_text(to=from_wa, text=reply)
         print(f"🤖 Respuesta automática (cuestionario): {reply}")
         return
@@ -122,7 +141,7 @@ def process_incoming(message, envelope):
 
         files = search_all_folders(keywords)
         if not files:
-            wa.send_text(to=from_wa, text="No encontré documentos con esos criterios. ¿Puedes darme otro nombre o palabra clave?")
+            wa.send_text(to=from_wa, text="No encontré documentos con esos criterios. ¿Quieres que intente buscarlos en Drive?")
             return
 
         for f in files:
@@ -134,13 +153,17 @@ def process_incoming(message, envelope):
             caption = f"📄 {f['name']}"
             wa.send_document_url(to=from_wa, link=link, filename=f.get("name"), caption=caption)
             print(f"📤 Enviado documento: {f['name']}")
-
         return
 
-    # 3️⃣ Chat normal con Gemini
+    # 3️⃣ Chat general con Gemini (sin invenciones)
     answer = chat_answer(text_body or "", business_name=BUSINESS_NAME)
-    wa.send_text(to=from_wa, text=answer)
-    print(f"💬 Respuesta generada: {answer}")
+    if not answer or "no tengo" in answer.lower():
+        final_text = f"{random_fallback()} ¿Deseas que busque la respuesta en internet?"
+    else:
+        final_text = answer
+
+    wa.send_text(to=from_wa, text=final_text)
+    print(f"💬 Respuesta generada: {final_text}")
 
 # ============================
 # INICIO DEL SERVIDOR
