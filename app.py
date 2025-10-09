@@ -68,8 +68,13 @@ def process_incoming(message, envelope):
     if msg_type == "text":
         text_body = (message.get("text", {}) or {}).get("body", "").strip()
     elif msg_type == "interactive":
-        # botones/listas
-        text_body = (message.get("interactive", {}).get("button_reply", {}) or {}).get("title") \                    or (message.get("interactive", {}).get("list_reply", {}) or {}).get("title")
+    # botones / listas
+    interactive = message.get("interactive", {})
+    text_body = (
+        (interactive.get("button_reply", {}) or {}).get("title")
+        or (interactive.get("list_reply", {}) or {}).get("title")
+        or ""
+    )
     else:
         text_body = ""
 
