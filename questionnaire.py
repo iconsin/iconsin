@@ -1,43 +1,20 @@
-from typing import Optional
-from state_store import StateStore
+# questionnaire.py
+def obtener_respuesta_automatica(mensaje: str) -> str:
+    """
+    Retorna una respuesta automática básica según el mensaje del usuario.
+    Esta versión no usa IA, solo reglas simples.
+    """
 
-STEPS = [
-    {"key": "name", "q": "¡Hola! Soy el asistente. ¿Cómo te llamas?"},
-    {"key": "need", "q": "¿En qué puedo ayudarte? (breve)"},
-    {"key": "phone", "q": "¿Me compartes tu teléfono de contacto?"},
-]
+    mensaje = mensaje.lower().strip()
 
-FINAL_MSG = ("Gracias, registré tus datos. Un asesor te contactará. "
-             "Escribe 'FIN' para terminar o continúa con tu consulta.")
+    if any(palabra in mensaje for palabra in ["hola", "buenas", "saludo"]):
+        return "¡Hola! 👋 Soy el asistente virtual de ICONSA. ¿En qué puedo ayudarte?"
 
-class Questionnaire:
-    def __init__(self, store: StateStore):
-        self.store = store
+    if "documento" in mensaje or "contrato" in mensaje or "factura" in mensaje:
+        return "¿Podrías indicarme el nombre o tipo de documento que necesitas?"
 
-    def handle_message(self, user_id: str, message: str) -> Optional[str]:
-        if not message:
-            return None
-        if message.upper() in {"CANCEL", "SALIR"}:
-            self.store.clear_flow(user_id)
-            return "Cuestionario cancelado. ¿En qué más te apoyo?"
+    if "gracias" in mensaje:
+        return "¡Con gusto! 😊 Si necesitas algo más, estoy aquí para ayudarte."
 
-        state = self.store.get_flow(user_id) or {"step_idx": 0, "answers": {}}
-        if state.get("completed"):
-            if message.upper() == "FIN":
-                self.store.clear_flow(user_id)
-                return "Proceso finalizado. ¡Gracias!"
-            return None
-
-        step_idx = state.get("step_idx", 0)
-        answers = state.get("answers", {})
-
-        answers[STEPS[step_idx]["key"]] = message.strip()
-        step_idx += 1
-
-        if step_idx >= len(STEPS):
-            self.store.save_lead(user_id, answers)
-            self.store.set_flow(user_id, {"completed": True, "answers": answers})
-            return FINAL_MSG
-        else:
-            self.store.set_flow(user_id, {"step_idx": step_idx, "answers": answers})
-            return STEPS[step_idx]["q"]
+    # Respuesta por defecto
+    return "Estoy aquí para ayudarte. ¿Podrías especificar tu consulta?"
