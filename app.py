@@ -12,7 +12,7 @@ app = Flask(__name__)
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN") or "TU_TOKEN_PERMANENTE_AQUI"
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID") or "25681420111462727"  # ID de tu número de WhatsApp
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN") or "mi_token_de_verificacion"
-BUSINESS_NAME = "ICONSA"
+BUSINESS_NAME = os.getenv("BUSINESS_NAME", "ICONSA")
 
 WHATSAPP_URL = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
 
@@ -54,22 +54,39 @@ def whatsapp_webhook():
         data = request.get_json()
         print(f"📩 Datos recibidos: {data}")
 
-        # Validación de estructura
+        # A veces Meta envía notificaciones de "status", no "messages"
         entry = data.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
-        messages = changes["value"].get("messages")
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
 
+        # Si no hay mensajes (ej: status, ack, etc.)
         if not messages:
+            print("⚙️ Evento no contiene mensajes (probablemente status update).")
             return "EVENT_RECEIVED", 200
 
         # Extraer datos del mensaje
         message = messages[0]
-        from_wa = message["from"]  # número del usuario
-        text_body = message["text"]["body"] if "text" in message else ""
+        from_wa = message.get("from")
+        msg_type = message.get("type", "")
+        text_body = ""
+
+        # Soporte para tipos de mensaje: text, interactive, etc.
+        if msg_type == "text":
+            text_body = message["text"].get("body", "")
+        elif msg_type == "interactive":
+            interactive = message.get("interactive", {})
+            text_body = (
+                (interactive.get("button_reply", {}) or {}).get("title") or
+                (interactive.get("list_reply", {}) or {}).get("title") or ""
+            )
+        else:
+            print(f"⚠️ Tipo de mensaje no soportado: {msg_type}")
+            return "EVENT_RECEIVED", 200
 
         # Procesar con Gemini
         if text_body:
-            print(f"🤖 Mensaje recibido: {text_body}")
+            print(f"🤖 Mensaje recibido de {from_wa}: {text_body}")
             ai_response = chat_answer(text_body, business_name=BUSINESS_NAME)
             print(f"🧠 Respuesta IA: {ai_response}")
 
@@ -100,8 +117,9 @@ def verify_token():
 
 
 # ============================================================
-# SERVIDOR LOCAL
+# SERVIDOR LOCAL O DEPLOY
 # ============================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Iniciando servidor WhatsApp+Gemini en puerto {port}")
     app.run(host="0.0.0.0", port=port, debug=True)
