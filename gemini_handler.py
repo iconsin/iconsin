@@ -1,32 +1,19 @@
 # gemini_handler.py
-import google.generativeai as genai
-import os
-
-# Configura la clave de API de Gemini (si existe)
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-else:
-    print("⚠️ GEMINI_API_KEY no configurada. Se usarán respuestas por defecto.")
-
 def chat_answer(prompt: str, business_name: str = "ICONSA") -> str:
     """
-    Procesa una pregunta con Gemini. Si no hay clave o hay error,
-    responde con un mensaje base genérico.
+    Simula respuesta inteligente (si no hay Gemini configurado).
+    En producción puedes reactivar Gemini API.
     """
     try:
-        if not GEMINI_KEY:
-            raise ValueError("No hay clave de Gemini configurada")
-
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(f"Eres el asistente virtual de {business_name}. "
-                                          f"Responde de forma profesional y breve: {prompt}")
-        if response and response.text:
-            return response.text.strip()
+        prompt = prompt.lower()
+        if "hola" in prompt:
+            return f"¡Hola! 👋 Soy el asistente virtual de {business_name}. ¿Cómo puedo ayudarte hoy?"
+        elif "gracias" in prompt:
+            return "¡Con gusto! 😊 Si necesitas algo más, estoy aquí."
+        elif "adiós" in prompt or "chau" in prompt:
+            return "Hasta pronto 👋, fue un placer ayudarte."
         else:
-            return "Lo siento, no pude generar una respuesta en este momento."
+            return f"Recibí tu mensaje: '{prompt}'. En breve te responderá un asesor de {business_name}."
     except Exception as e:
-        print(f"⚠️ Error en Gemini: {e}")
-        # Respuesta por defecto si algo falla
-        return f"Soy el asistente virtual de {business_name}. ¿Podrías reformular tu consulta?"
+        print(f"⚠️ Error generando respuesta: {e}")
+        return f"Hola, soy el asistente de {business_name}. ¿En qué puedo ayudarte?"
