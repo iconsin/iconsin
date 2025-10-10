@@ -1,40 +1,32 @@
 # gemini_handler.py
-import os
 import google.generativeai as genai
+import os
 
-# ============================================================
-# CONFIGURACIÓN DE GEMINI
-# ============================================================
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Configura la clave de API de Gemini (si existe)
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY:
-    raise Exception("⚠️ No se encontró la variable GEMINI_API_KEY en el entorno.")
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+else:
+    print("⚠️ GEMINI_API_KEY no configurada. Se usarán respuestas por defecto.")
 
-genai.configure(api_key=GEMINI_API_KEY)
-
-# ============================================================
-# FUNCIÓN PRINCIPAL
-# ============================================================
 def chat_answer(prompt: str, business_name: str = "ICONSA") -> str:
     """
-    Genera una respuesta usando Gemini.
+    Procesa una pregunta con Gemini. Si no hay clave o hay error,
+    responde con un mensaje base genérico.
     """
     try:
-        prompt = prompt.strip()
-        if not prompt:
-            return "No recibí texto para procesar. ¿Podrías repetirlo?"
+        if not GEMINI_KEY:
+            raise ValueError("No hay clave de Gemini configurada")
 
-        model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(
-            f"Eres un asistente virtual de {business_name}. "
-            f"Responde de forma natural, profesional y conversacional al siguiente mensaje:\n\n{prompt}"
-        )
-
-        if not response or not response.text:
-            return "No tengo una respuesta en este momento. ¿Podrías reformular tu pregunta?"
-
-        return response.text.strip()
-
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"Eres el asistente virtual de {business_name}. "
+                                          f"Responde de forma profesional y breve: {prompt}")
+        if response and response.text:
+            return response.text.strip()
+        else:
+            return "Lo siento, no pude generar una respuesta en este momento."
     except Exception as e:
-        print(f"❌ Error en chat_answer: {e}")
-        return "Ocurrió un problema al generar la respuesta con la IA."
+        print(f"⚠️ Error en Gemini: {e}")
+        # Respuesta por defecto si algo falla
+        return f"Soy el asistente virtual de {business_name}. ¿Podrías reformular tu consulta?"
