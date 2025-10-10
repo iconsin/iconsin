@@ -24,14 +24,12 @@ def chat_answer(prompt: str, business_name: str = "ICONSA") -> str:
         if not prompt:
             return "No recibí texto para procesar. ¿Podrías repetirlo?"
 
-        # Usa el modelo de texto de Gemini
         model = genai.GenerativeModel("gemini-pro")
         response = model.generate_content(
             f"Eres un asistente virtual de {business_name}. "
             f"Responde de forma natural, profesional y conversacional al siguiente mensaje:\n\n{prompt}"
         )
 
-        # Si Gemini no devuelve texto, devolvemos algo genérico
         if not response or not response.text:
             return "No tengo una respuesta en este momento. ¿Podrías reformular tu pregunta?"
 
