@@ -5,48 +5,40 @@ from flask import Flask, request, jsonify
 from gemini_handler import chat_answer
 
 # ============================================================
-# CONFIGURACIÓN BÁSICA
+# CONFIGURACIÓN
 # ============================================================
 app = Flask(__name__)
 
 ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN") or "TU_TOKEN_PERMANENTE_AQUI"
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID") or "25681420111462727"  # ID de tu número de WhatsApp
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID") or "863388500182148"
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN") or "mi_token_de_verificacion"
-BUSINESS_NAME = os.getenv("BUSINESS_NAME", "ICONSA")
+BUSINESS_NAME = "ICONSA"
 
 WHATSAPP_URL = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
 
 # ============================================================
-# FUNCIÓN PARA ENVIAR MENSAJES A WHATSAPP
+# ENVÍO DE MENSAJES A WHATSAPP
 # ============================================================
 def send_whatsapp_message(to: str, text: str):
-    """
-    Envía un mensaje de texto a un número de WhatsApp usando la Cloud API.
-    """
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "text",
+        "text": {"body": text}
+    }
     try:
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "messaging_product": "whatsapp",
-            "to": to,
-            "type": "text",
-            "text": {"body": text}
-        }
-
-        response = requests.post(WHATSAPP_URL, headers=headers, json=payload)
-        print(f"📤 Enviado a {to}: {text}")
-        print(f"🔎 Respuesta de Meta: {response.status_code} - {response.text}")
-
-        if response.status_code != 200:
-            print("⚠️ Error al enviar el mensaje a WhatsApp.")
+        r = requests.post(WHATSAPP_URL, headers=headers, json=payload)
+        print(f"📤 Enviando a {to}: {text}")
+        print(f"🔎 Respuesta Meta: {r.status_code} - {r.text}")
     except Exception as e:
-        print(f"❌ Error en send_whatsapp_message: {e}")
+        print(f"❌ Error enviando mensaje: {e}")
 
 # ============================================================
-# WEBHOOK PARA RECIBIR MENSAJES (POST)
+# WEBHOOK - RECEPCIÓN DE MENSAJES
 # ============================================================
 @app.route("/whatsapp/webhook", methods=["POST"])
 def whatsapp_webhook():
@@ -54,50 +46,33 @@ def whatsapp_webhook():
         data = request.get_json()
         print(f"📩 Datos recibidos: {data}")
 
-        # A veces Meta envía notificaciones de "status", no "messages"
         entry = data.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
+        messages = changes["value"].get("messages")
 
-        # Si no hay mensajes (ej: status, ack, etc.)
         if not messages:
-            print("⚙️ Evento no contiene mensajes (probablemente status update).")
             return "EVENT_RECEIVED", 200
 
-        # Extraer datos del mensaje
-        message = messages[0]
-        from_wa = message.get("from")
-        msg_type = message.get("type", "")
-        text_body = ""
+        msg = messages[0]
+        user_number = msg["from"]
+        text = msg.get("text", {}).get("body", "").strip()
 
-        # Soporte para tipos de mensaje: text, interactive, etc.
-        if msg_type == "text":
-            text_body = message["text"].get("body", "")
-        elif msg_type == "interactive":
-            interactive = message.get("interactive", {})
-            text_body = (
-                (interactive.get("button_reply", {}) or {}).get("title") or
-                (interactive.get("list_reply", {}) or {}).get("title") or ""
-            )
-        else:
-            print(f"⚠️ Tipo de mensaje no soportado: {msg_type}")
-            return "EVENT_RECEIVED", 200
+        print(f"💬 Mensaje recibido de {user_number}: {text}")
 
         # Procesar con Gemini
-        if text_body:
-            print(f"🤖 Mensaje recibido de {from_wa}: {text_body}")
-            ai_response = chat_answer(text_body, business_name=BUSINESS_NAME)
-            print(f"🧠 Respuesta IA: {ai_response}")
+        if text:
+            respuesta = chat_answer(text, business_name=BUSINESS_NAME)
+        else:
+            respuesta = "Hola 👋, soy el asistente virtual de ICONSA. ¿En qué puedo ayudarte?"
 
-            send_whatsapp_message(to=from_wa, text=ai_response)
+        print(f"🤖 Respuesta generada: {respuesta}")
+        send_whatsapp_message(user_number, respuesta)
 
         return "EVENT_RECEIVED", 200
 
     except Exception as e:
         print(f"❌ Error en webhook: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 # ============================================================
 # VERIFICACIÓN DEL WEBHOOK (GET)
@@ -115,11 +90,22 @@ def verify_token():
         print("❌ Error de verificación del webhook.")
         return "Error de verificación", 403
 
+# ============================================================
+# RUTA PRINCIPAL
+# ============================================================
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "status": "ok",
+        "service": "ICONSA WhatsApp Bot",
+        "version": "2.0",
+        "description": "Bot conectado a Meta Cloud API y Gemini"
+    })
 
 # ============================================================
-# SERVIDOR LOCAL O DEPLOY
+# EJECUCIÓN
 # ============================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Iniciando servidor WhatsApp+Gemini en puerto {port}")
+    print(f"🚀 Iniciando bot en puerto {port}...")
     app.run(host="0.0.0.0", port=port, debug=True)
