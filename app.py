@@ -1,4 +1,4 @@
-# app.py (Diagnóstico nivel 2)
+# app.py (Diagnóstico final - modo RAYOS X)
 import os
 import requests
 from flask import Flask, request, jsonify
@@ -12,87 +12,77 @@ WHATSAPP_URL = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
 app = Flask(__name__)
 
 def enviar_mensaje(destinatario, texto):
-    """Envía mensaje a WhatsApp Cloud API."""
-    try:
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "messaging_product": "whatsapp",
-            "to": destinatario,
-            "type": "text",
-            "text": {"body": texto}
-        }
-
-        print(f"📤 Enviando mensaje a {destinatario}...")
-        r = requests.post(WHATSAPP_URL, headers=headers, json=data)
-        print(f"🔎 Código HTTP: {r.status_code}")
-        print(f"🔎 Respuesta completa: {r.text}")
-
-        if r.status_code != 200:
-            print("⚠️ Falló el envío a WhatsApp.")
-
-    except Exception as e:
-        print("❌ Error en enviar_mensaje:", e)
+    """Envía un mensaje directo de texto a WhatsApp."""
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "to": destinatario,
+        "type": "text",
+        "text": {"body": texto}
+    }
+    print(f"📤 Intentando enviar mensaje a {destinatario}: {texto}")
+    r = requests.post(WHATSAPP_URL, headers=headers, json=data)
+    print(f"🔎 Código HTTP: {r.status_code}")
+    print(f"🔎 Respuesta Meta: {r.text}")
 
 @app.route("/whatsapp/webhook", methods=["POST"])
 def recibir_mensaje():
-    """Procesa mensajes recibidos desde Meta."""
+    print("📥 [1] Se recibió un POST en /whatsapp/webhook")
+
+    # Capturamos el contenido crudo por si Meta no envía JSON bien formateado
+    raw_data = request.data.decode("utf-8", errors="ignore")
+    print("🧾 [2] Contenido RAW recibido:", raw_data)
+
     try:
-        print("📥 Se recibió un POST en /whatsapp/webhook.")
-        data = request.get_json(silent=True)
-        print("🧾 JSON recibido crudo:", data)
+        json_data = request.get_json(force=True, silent=False)
+        print("📦 [3] JSON parseado correctamente:", json_data)
+    except Exception as e:
+        print(f"❌ [3] Error al parsear JSON: {e}")
+        json_data = None
 
-        if not data:
-            print("⚠️ No hay datos en el POST.")
-            return "NO DATA", 200
-
-        if data.get("object") != "whatsapp_business_account":
-            print("⚠️ No es un mensaje de WhatsApp.")
-            return "NOT WHATSAPP", 200
-
-        for entry in data.get("entry", []):
+    # Si Meta manda el formato correcto, lo procesamos
+    if json_data and json_data.get("object") == "whatsapp_business_account":
+        for entry in json_data.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 messages = value.get("messages", [])
                 for msg in messages:
                     numero = msg.get("from")
                     texto = msg.get("text", {}).get("body", "")
-                    print(f"📩 MENSAJE RECIBIDO: {texto} (de {numero})")
+                    print(f"📩 [4] MENSAJE DETECTADO: {texto} (de {numero})")
+                    if numero:
+                        enviar_mensaje(numero, "✅ Recibí tu mensaje correctamente.")
+    else:
+        print("⚠️ [4] No se detectó formato de mensaje válido en el JSON recibido.")
 
-                    if numero and texto:
-                        enviar_mensaje(numero, f"✅ Hola {numero}, tu mensaje fue recibido correctamente.")
-
-        return "EVENT_RECEIVED", 200
-
-    except Exception as e:
-        print("❌ Error general en webhook:", e)
-        return jsonify({"error": str(e)}), 500
+    print("✅ [5] Finalizando ciclo de recepción.")
+    return "EVENT_RECEIVED", 200
 
 
 @app.route("/whatsapp/webhook", methods=["GET"])
 def verificar_webhook():
-    """Verificación inicial del Webhook."""
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado correctamente con Meta.")
+        print("✅ Webhook verificado correctamente.")
         return challenge, 200
     else:
-        print("❌ Falló la verificación del webhook.")
+        print("❌ Error de verificación del webhook.")
         return "Error de verificación", 403
 
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "ok", "service": "diagnostic-v2"})
+    return jsonify({"status": "ok", "service": "diagnostic-xray"})
 
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f"🚀 Bot diagnóstico v2 en puerto {port}")
+    print(f"🚀 Iniciando bot de diagnóstico RAYOS X en puerto {port}")
     app.run(host="0.0.0.0", port=port, debug=True)
 
