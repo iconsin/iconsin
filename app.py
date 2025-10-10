@@ -1,5 +1,5 @@
 # ==========================================================
-# ICONSA WhatsApp Bot (versión de depuración completa)
+# ICONSA WhatsApp Bot (versión de depuración total)
 # ==========================================================
 import os
 import requests
@@ -55,60 +55,50 @@ def send_whatsapp_message(to, text):
 @app.route("/whatsapp/webhook", methods=["POST"])
 def whatsapp_webhook():
     """
-    Recibe mensajes desde la Cloud API de WhatsApp.
+    Recibe mensajes desde la Cloud API de WhatsApp y los imprime tal cual.
     """
-    data = request.get_json(force=True, silent=True)
     print("\n📬 === NUEVO EVENTO RECIBIDO ===")
-    print(data)
 
+    try:
+        # Intentamos parsear el JSON de la petición
+        data = request.get_json(force=True, silent=False)
+        print("📦 Contenido parseado correctamente (JSON):")
+        print(data)
+
+    except Exception as e:
+        # Si no se pudo parsear el JSON, mostramos el cuerpo crudo
+        print(f"❌ Error al interpretar JSON: {e}")
+        raw_data = request.data.decode("utf-8", errors="ignore")
+        print("🧾 Contenido crudo recibido:")
+        print(raw_data)
+        data = {}
+
+    # ------------------------------------------------------
+    # Intentamos procesar si existe el campo "messages"
+    # ------------------------------------------------------
     try:
         entry = (data.get("entry") or [{}])[0]
         changes = (entry.get("changes") or [{}])[0]
         value = changes.get("value", {})
         messages = value.get("messages", [])
 
-        if not messages:
-            print("📭 Evento sin campo 'messages' (probablemente status update)")
-            return "EVENT_RECEIVED", 200
-
-        msg = messages[0]
-        user_number = msg.get("from")
-        msg_type = msg.get("type", "")
-        text_body = ""
-
-        if msg_type == "text":
+        if messages:
+            msg = messages[0]
+            user_number = msg.get("from")
             text_body = msg.get("text", {}).get("body", "").strip()
-        elif msg_type == "interactive":
-            interactive = msg.get("interactive", {})
-            text_body = (
-                (interactive.get("button_reply", {}) or {}).get("title")
-                or (interactive.get("list_reply", {}) or {}).get("title")
-                or ""
-            )
+            print(f"💬 Mensaje recibido de {user_number}: {text_body}")
 
-        print(f"💬 Mensaje recibido de {user_number}: {text_body}")
-
-        if not text_body:
-            print("🕳 El mensaje no tiene texto (puede ser imagen o botón vacío).")
-            return "EVENT_RECEIVED", 200
-
-        # --------------------------------------------------
-        # Procesamiento con IA (Gemini)
-        # --------------------------------------------------
-        try:
-            respuesta = chat_answer(text_body, business_name=BUSINESS_NAME)
-        except Exception as e:
-            print(f"⚠️ Error en chat_answer: {e}")
-            respuesta = f"Hola 👋, soy el asistente de {BUSINESS_NAME}. ¿En qué puedo ayudarte?"
-
-        print(f"🤖 Respuesta generada: {respuesta}")
-        send_whatsapp_message(user_number, respuesta)
-
-        return "EVENT_RECEIVED", 200
+            if text_body:
+                respuesta = chat_answer(text_body, business_name=BUSINESS_NAME)
+                print(f"🤖 Respuesta generada: {respuesta}")
+                send_whatsapp_message(user_number, respuesta)
+        else:
+            print("📭 No hay 'messages' en este evento (puede ser status, delivery o ack).")
 
     except Exception as e:
-        print(f"❌ Error procesando webhook: {e}")
-        return jsonify({"error": str(e)}), 500
+        print(f"⚠️ Error procesando estructura del evento: {e}")
+
+    return "EVENT_RECEIVED", 200
 
 
 # ----------------------------------------------------------
@@ -136,7 +126,7 @@ def home():
     return jsonify({
         "status": "ok",
         "service": "ICONSA WhatsApp Bot",
-        "version": "debug-1.0"
+        "version": "debug-2.0"
     })
 
 
