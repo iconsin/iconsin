@@ -1,16 +1,32 @@
 import os
 import google.generativeai as genai
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Configuración
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-def ask_gemini(prompt):
+if not GEMINI_API_KEY:
+    raise ValueError("❌ Falta la variable de entorno GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+def ask_gemini(pregunta: str) -> str:
+    """
+    Envía una pregunta a Gemini y devuelve una respuesta procesada en texto.
+    Si ocurre un error, devuelve None.
+    """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        if response and response.text:
-            return response.text.strip()
-        else:
-            return None
+        contexto = f"""
+        Eres ICONSA BOT, el asistente técnico oficial de ICONSA Panamá.
+        ICONSA brinda servicios de soporte técnico, redes, servidores, licencias y gestión IT.
+        Responde SIEMPRE en español, de forma profesional, empática y concisa.
+        Cliente: {pregunta}
+        """
+
+        respuesta = model.generate_content(contexto)
+        texto = respuesta.text.strip() if respuesta and respuesta.text else None
+        return texto
     except Exception as e:
-        print(f"⚠️ Error con Gemini: {e}")
+        print(f"⚠️ Error en Gemini: {e}")
         return None
+
