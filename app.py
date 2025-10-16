@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify
 # CONFIGURACIÓN BÁSICA
 # ============================================================
 
-ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN") or "AQUI_TU_TOKEN_PERMANENTE"
+ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN") or "AQUI_TU_TOKEN_PERMANENTE"
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID") or "863388500182148"
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN") or "iconsin-bot"
 
