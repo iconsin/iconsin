@@ -55,8 +55,11 @@ def verificar():
 # ==============================
 # RECEPCIÓN DE MENSAJES
 # ==============================
-@app.route("/webhook", methods=["POST"])
+@app.route("/webhook", methods=["GET", "POST"])
+@app.route("/whatsapp/webhook", methods=["GET", "POST"])
 def webhook():
+    ...
+
     data = request.get_json()
     print("📩 Datos recibidos:", data)
 
