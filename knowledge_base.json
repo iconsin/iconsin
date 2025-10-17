@@ -1,0 +1,10 @@
+[
+  {"departamento": "Recursos Humanos", "pregunta": "cuál es el horario laboral", "respuesta": "El horario laboral es de lunes a viernes de 8:00 a.m. a 5:00 p.m."},
+  {"departamento": "Recursos Humanos", "pregunta": "cómo solicitar vacaciones", "respuesta": "Para solicitar vacaciones debes llenar el formulario de 'Solicitud de Vacaciones' disponible en Google Drive: https://drive.google.com/file/d/XXXXXXXX/view"},
+  {"departamento": "Contabilidad", "pregunta": "cómo solicito un comprobante de pago", "respuesta": "Puedes solicitarlo completando el formulario en: https://drive.google.com/drive/folders/XXXXXXX"},
+  {"departamento": "Control de Calidad", "pregunta": "cómo reportar una no conformidad", "respuesta": "Debes llenar el formato 'Reporte de No Conformidad' disponible en: https://drive.google.com/file/d/YYYYYYY/view"},
+  {"departamento": "ISO", "pregunta": "qué norma iso cumple la empresa", "respuesta": "Actualmente cumplimos con la norma ISO 9001:2015 de gestión de calidad."},
+  {"departamento": "TI", "pregunta": "cómo solicitar soporte técnico", "respuesta": "Envía un correo a soporte@empresa.com o abre un ticket en el sistema GestorTI."},
+  {"departamento": "General", "pregunta": "dónde están ubicados", "respuesta": "Estamos ubicados en Panamá, Ciudad de Panamá, Vía España, Edificio Iconsa, piso 3."},
+  {"departamento": "General", "pregunta": "quién es el gerente general", "respuesta": "El gerente general actual es el Sr. Jorge Torres."}
+]
