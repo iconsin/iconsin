@@ -14,9 +14,9 @@ def find_best_answer(user_input, knowledge_base, threshold=0.55):
         if score > best_score:
             best_score = score
             best_match = item
-    if best_score >= threshold:
-        respuesta = best_match["respuesta"]
-        if re.search(r"https?://[^\s]+", respuesta):
+    if best_score >= threshold and best_match:
+        respuesta = best_match.get("respuesta", "")
+        if re.search(r"https?://[^\s]+", respuesta or ""):
             return {"texto": respuesta, "tipo": "link", "departamento": best_match.get("departamento", "General")}
         return {"texto": respuesta, "tipo": "texto", "departamento": best_match.get("departamento", "General")}
-    return {"texto": "Por el momento no contamos con esa información. Para mayor detalle, puede consultar con el departamento correspondiente.", "tipo": "texto", "departamento": "General"}
+    return {"texto": None, "tipo": "texto", "departamento": "General"}

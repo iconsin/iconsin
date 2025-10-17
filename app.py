@@ -1,47 +1,74 @@
 from flask import Flask, request, jsonify
-import requests
-import google.generativeai as genai
 import os
 import json
+from meta_whatsapp import send_whatsapp_message
+from ia_handler import load_knowledge_base, find_best_answer
+from questionnaire import buscar_respuesta
+from gemini_handler import ask_gemini
 
 # ==========================================================
 # CONFIGURACIÓN INICIAL
 # ==========================================================
 app = Flask(__name__)
 
-# Variables de entorno (Render → Environment Variables)
+# Mantener EXACTAMENTE estos nombres de variables de entorno
+BUSINESS_NAME = os.getenv("BUSINESS_NAME", "ICONSA")
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "icon_sa_token")
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN", "TU_TOKEN_FACEBOOK")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID", "TU_PHONE_NUMBER_ID")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "TU_API_KEY_GEMINI")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN")   # usado internamente por meta_whatsapp.py
+PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "5000"))
 
-# Configurar Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-modelo = genai.GenerativeModel("gemini-1.5-flash")
+# (Opcionales para otras funciones futuras — los respetamos aunque no se usen aquí)
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+DRIVE_FOLDER_ID_USUARIOS_SG = os.getenv("DRIVE_FOLDER_ID_USUARIOS_SG")
+DER_ID_USUARIOS_CESANTES = os.getenv("DER_ID_USUARIOS_CESANTES")
+
+# Cargar base de conocimiento en memoria
+try:
+    KB = load_knowledge_base()
+except Exception as e:
+    print("⚠️ No se pudo cargar knowledge_base.json:", e)
+    KB = []
 
 # ==========================================================
-# FUNCIÓN PARA ENVIAR MENSAJES A WHATSAPP
+# UTILIDAD: extraer texto del payload de WhatsApp
 # ==========================================================
-def enviar_mensaje(wa_id, texto):
-    """Envía un mensaje de texto a través de la API de WhatsApp Cloud."""
-    url = f"https://graph.facebook.com/v20.0/{PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": wa_id,
-        "type": "text",
-        "text": {"body": texto}
-    }
-
+def extract_text(payload: dict) -> tuple[str, str] | tuple[None, None]:
+    \"\"\"Devuelve (wa_id, texto) o (None, None) si no hay mensaje.\"\"\"
     try:
-        r = requests.post(url, headers=headers, json=data)
-        print(f"📤 Enviado a {wa_id}: {texto}")
-        print("🔎 Respuesta de Meta:", r.status_code, "-", r.text)
+        entry = payload.get("entry", [])[0]
+        changes = entry.get("changes", [])[0]
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
+        if not messages:
+            return None, None
+
+        msg = messages[0]
+        wa_id = msg.get("from")
+
+        # tipo texto estándar
+        if msg.get("type") == "text":
+            texto = msg.get("text", {}).get("body", "")
+
+        # botones/interactive
+        elif msg.get("type") == "interactive":
+            interactive = msg.get("interactive", {})
+            if interactive.get("type") == "button_reply":
+                texto = interactive.get("button_reply", {}).get("title", "")
+            elif interactive.get("type") == "list_reply":
+                texto = interactive.get("list_reply", {}).get("title", "")
+            else:
+                texto = ""
+        else:
+            texto = ""
+
+        return wa_id, (texto or "").strip()
     except Exception as e:
-        print("❌ Error enviando mensaje:", e)
+        print("❌ Error extrayendo texto:", e)
+        return None, None
 
 # ==========================================================
 # VERIFICACIÓN DEL WEBHOOK (GET)
@@ -49,17 +76,14 @@ def enviar_mensaje(wa_id, texto):
 @app.route("/webhook", methods=["GET"])
 @app.route("/whatsapp/webhook", methods=["GET"])
 def verificar():
-    """Verifica la conexión del webhook con Meta."""
     mode = request.args.get("hub.mode")
     token = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
-
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado correctamente.")
+        print("✅ Webhook verificado.")
         return challenge, 200
-    else:
-        print("❌ Error de verificación de webhook.")
-        return "Error de verificación", 403
+    print("❌ Verificación fallida.")
+    return "Error de verificación", 403
 
 # ==========================================================
 # RECEPCIÓN DE MENSAJES (POST)
@@ -67,92 +91,58 @@ def verificar():
 @app.route("/webhook", methods=["POST"])
 @app.route("/whatsapp/webhook", methods=["POST"])
 def webhook():
-    print("\n==============================================================")
-    print("📬 NUEVO EVENTO RECIBIDO DESDE WHATSAPP")
-    print("==============================================================")
+    print("\\n================ NUEVO EVENTO ================")
+    raw_body = request.get_data(as_text=True)
+    print("RAW:", raw_body[:2000])
 
     try:
-        # 🔹 Leer el cuerpo crudo del request
-        raw_body = request.get_data(as_text=True)
-        print("🧾 RAW BODY (texto recibido):")
-        print(raw_body if raw_body.strip() else "(vacío)")
-
-        # 🔹 Intentar decodificar JSON
-        data = request.get_json(force=True, silent=True)
-        if not data:
-            print("⚠️ No se pudo decodificar el JSON automáticamente.")
-            try:
-                import json
-                data = json.loads(raw_body)
-            except Exception as e:
-                print("❌ Error manual al decodificar JSON:", e)
-                return jsonify({"status": "error", "message": str(e)}), 200
-
-        print("\n🔍 JSON DECODIFICADO COMPLETO:")
-        print(json.dumps(data, indent=2))
-
-        # 🔹 Verificar si contiene mensajes
-        entry = data.get("entry", [])[0] if data.get("entry") else {}
-        changes = entry.get("changes", [])[0] if entry.get("changes") else {}
-        value = changes.get("value", {})
-        messages = value.get("messages", [])
-
-        if messages:
-            msg = messages[0]
-            wa_id = msg.get("from")
-            text = msg.get("text", {}).get("body", "")
-            print(f"📩 MENSAJE DETECTADO de {wa_id}: {text}")
-
-            # Respuesta automática de prueba
-            enviar_mensaje(wa_id, "✅ Recibí tu mensaje correctamente. Prueba IA en breve.")
-        else:
-            print("⚠️ No se encontró ningún mensaje en el JSON recibido.")
-
+        data = request.get_json(force=True, silent=True) or json.loads(raw_body)
     except Exception as e:
-        print("❌ Error general en webhook:", e)
+        print("❌ JSON inválido:", e)
+        return "EVENT_RECEIVED", 200
+
+    print("JSON:", json.dumps(data, ensure_ascii=False, indent=2))
+
+    wa_id, texto = extract_text(data)
+    if not wa_id or not texto:
+        print("⚠️ No hay mensaje de texto en el payload.")
+        return "EVENT_RECEIVED", 200
+
+    # 1) Heurística simple por secciones predefinidas (questionnaire.py)
+    respuesta = buscar_respuesta(texto)
+
+    # 2) Base de conocimiento (knowledge_base.json)
+    if not respuesta and KB:
+        kb_res = find_best_answer(texto, KB)
+        respuesta = kb_res.get("texto")
+
+    # 3) Gemini (fallback)
+    if not respuesta:
+        respuesta = ask_gemini(texto) or \
+            "Actualmente no cuento con esa información, pero puedo escalar tu consulta al departamento correspondiente."
+
+    # Firma/branding
+    if BUSINESS_NAME:
+        respuesta = f"{respuesta}\\n\\n— {BUSINESS_NAME} BOT"
+
+    # Enviar respuesta
+    try:
+        send_whatsapp_message(wa_id, respuesta)
+    except Exception as e:
+        print("❌ Error enviando respuesta:", e)
 
     return "EVENT_RECEIVED", 200
 
-
-    # ==========================================================
-    # RESPUESTA CON IA (GEMINI)
-    # ==========================================================
-    prompt = f"""
-    Eres ICONSA BOT, el asistente virtual inteligente de la empresa ICONSA.
-    ICONSA ofrece soporte técnico, redes, y soluciones IT en Panamá.
-
-    - Responde de forma profesional, breve y cordial.
-    - Si la pregunta se relaciona con RRHH, contabilidad, soporte o ISO, responde acorde.
-    - Si no tienes la información, responde:
-      "Actualmente no cuento con esa información, pero puedo escalar tu consulta al departamento correspondiente."
-
-    Cliente: {nombre}
-    Mensaje recibido: "{mensaje}"
-    """
-
-    try:
-        respuesta_gemini = modelo.generate_content(prompt)
-        respuesta = respuesta_gemini.text.strip() if respuesta_gemini.text else "No logré generar una respuesta."
-    except Exception as e:
-        print("❌ Error al generar respuesta con Gemini:", e)
-        respuesta = "Tuve un problema para procesar tu mensaje, pero puedo reenviar tu consulta al área correspondiente."
-
-    # Enviar la respuesta al usuario
-    enviar_mensaje(wa_id, respuesta)
-
-    return jsonify({"status": "message sent"}), 200
-
 # ==========================================================
-# RUTA RAÍZ DE PRUEBA
+# RUTA RAÍZ
 # ==========================================================
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"status": "ok", "bot": "ICONSA BOT con IA activo"}), 200
+    return jsonify({"status": "ok", "bot": f"{BUSINESS_NAME} BOT", "debug": DEBUG}), 200
 
 # ==========================================================
-# MAIN
+# MAIN (para ejecución local)
 # ==========================================================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    print(f"🚀 Iniciando Chatbot IA Empresarial en puerto {port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    print(f"🚀 Iniciando {BUSINESS_NAME} BOT en {HOST}:{PORT} (debug={DEBUG})")
+    app.run(host=HOST, port=PORT, debug=DEBUG)

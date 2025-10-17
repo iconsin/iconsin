@@ -15,7 +15,7 @@ PREGUNTAS = {
 }
 
 def buscar_respuesta(texto):
-    texto = texto.lower()
+    texto = (texto or "").lower()
     for area, preguntas in PREGUNTAS.items():
         for clave, respuesta in preguntas.items():
             if clave in texto:
