@@ -8,7 +8,7 @@ if not GEMINI_API_KEY:
     raise ValueError("❌ Falta la variable de entorno GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
+modelo = genai.GenerativeModel("gemini-1.0-pro")
 
 def ask_gemini(pregunta: str) -> str:
     """
