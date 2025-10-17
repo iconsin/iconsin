@@ -67,32 +67,52 @@ def verificar():
 @app.route("/webhook", methods=["POST"])
 @app.route("/whatsapp/webhook", methods=["POST"])
 def webhook():
-    """Procesa mensajes entrantes de WhatsApp."""
-    print("\n📬 === NUEVO EVENTO RECIBIDO ===")
+    print("\n==============================================================")
+    print("📬 NUEVO EVENTO RECIBIDO DESDE WHATSAPP")
+    print("==============================================================")
 
-    # Leer el cuerpo crudo del request
-    raw = request.get_data(as_text=True)
-    print("🔹 Cuerpo RAW recibido:\n", raw if raw.strip() else "(vacío)")
-
-    # Intentar decodificar JSON
     try:
-        data = request.get_json(force=True)
-        print("\n🔹 JSON decodificado:")
+        # 🔹 Leer el cuerpo crudo del request
+        raw_body = request.get_data(as_text=True)
+        print("🧾 RAW BODY (texto recibido):")
+        print(raw_body if raw_body.strip() else "(vacío)")
+
+        # 🔹 Intentar decodificar JSON
+        data = request.get_json(force=True, silent=True)
+        if not data:
+            print("⚠️ No se pudo decodificar el JSON automáticamente.")
+            try:
+                import json
+                data = json.loads(raw_body)
+            except Exception as e:
+                print("❌ Error manual al decodificar JSON:", e)
+                return jsonify({"status": "error", "message": str(e)}), 200
+
+        print("\n🔍 JSON DECODIFICADO COMPLETO:")
         print(json.dumps(data, indent=2))
-    except Exception as e:
-        print("❌ Error al decodificar JSON:", e)
-        return jsonify({"status": "invalid json"}), 200
 
-    # Extraer datos del mensaje entrante
-    try:
-        mensaje = data["entry"][0]["changes"][0]["value"]["messages"][0]["text"]["body"]
-        wa_id = data["entry"][0]["changes"][0]["value"]["messages"][0]["from"]
-        nombre = data["entry"][0]["changes"][0]["value"]["contacts"][0]["profile"]["name"]
+        # 🔹 Verificar si contiene mensajes
+        entry = data.get("entry", [])[0] if data.get("entry") else {}
+        changes = entry.get("changes", [])[0] if entry.get("changes") else {}
+        value = changes.get("value", {})
+        messages = value.get("messages", [])
 
-        print(f"📩 MENSAJE DETECTADO de {nombre} ({wa_id}): {mensaje}")
+        if messages:
+            msg = messages[0]
+            wa_id = msg.get("from")
+            text = msg.get("text", {}).get("body", "")
+            print(f"📩 MENSAJE DETECTADO de {wa_id}: {text}")
+
+            # Respuesta automática de prueba
+            enviar_mensaje(wa_id, "✅ Recibí tu mensaje correctamente. Prueba IA en breve.")
+        else:
+            print("⚠️ No se encontró ningún mensaje en el JSON recibido.")
+
     except Exception as e:
-        print("⚠️ No se encontró mensaje de texto:", e)
-        return jsonify({"status": "no message"}), 200
+        print("❌ Error general en webhook:", e)
+
+    return "EVENT_RECEIVED", 200
+
 
     # ==========================================================
     # RESPUESTA CON IA (GEMINI)
