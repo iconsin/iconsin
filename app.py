@@ -16,7 +16,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "TU_API_KEY_GEMINI")
 
 # Configurar Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-modelo = genai.GenerativeModel("gemini-1.5-flash")
+modelo = genai.GenerativeModel("gemini-1.0-pro")
 
 # ==============================
 # FUNCIÓN PARA ENVIAR MENSAJE A WHATSAPP
